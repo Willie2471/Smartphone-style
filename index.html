@@ -11,7 +11,10 @@
   body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); }
   a { text-decoration: none; color: inherit; }
   .phone { max-width: 440px; min-height: 100vh; margin: 0 auto; padding: 48px 24px 24px; display: flex; flex-direction: column; }
-  .hello { font-size: 22px; font-weight: 600; color: var(--dark-green); margin-bottom: 6px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .hello { font-size: 22px; font-weight: 600; color: var(--dark-green); }
+  .close { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: #E6EBE4; color: var(--ink); }
+  .close:hover, .close:focus-visible { box-shadow: 0 0 0 3px rgba(33,163,72,.35); }
   .time { display: flex; align-items: baseline; gap: 8px; }
   .time .hm { font-size: 96px; font-weight: 300; letter-spacing: -5px; line-height: 1; }
   .time .ap { font-size: 22px; font-weight: 500; color: var(--muted); }
@@ -39,7 +42,12 @@
 <body>
 <main class="phone">
   <div>
-    <div class="hello" id="hello">Good {{friendlyTimeOfDay}} {{clientFirstName}}</div>
+    <div class="topbar">
+      <div class="hello" id="hello">Good {{friendlyTimeOfDay}} {{clientFirstName}}</div>
+      <a class="close" href="https://wsemployeeservices.wslawncareservicesllc.com/portal/dashboard/view/179025" target="_top" rel="noopener" aria-label="Close view" title="Close view">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M16 21v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path></svg>
+      </a>
+    </div>
     <div class="time"><span class="hm" id="hm">--:--</span><span class="ap" id="ap"></span></div>
     <div class="date" id="date"></div>
     <div class="weather">
