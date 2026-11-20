@@ -29,7 +29,8 @@
   .app .ico svg { width: 28px; height: 28px; }
   .app span { font-size: 12px; font-weight: 500; text-align: center; line-height: 1.2; }
   .app:hover .ico, .app:focus-visible .ico, .dock a:hover, .dock a:focus-visible { box-shadow: 0 0 0 3px rgba(33,163,72,.35); }
-  .dock { display: flex; justify-content: space-around; margin-top: auto; padding: 24px 0 16px; }
+  .grid-out { margin-top: 22px; }
+  .dock { display: flex; justify-content: space-around; margin-top: 28px; padding: 0 0 20px; }
   .dock a { width: 60px; height: 60px; border-radius: 50%; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
   .dock svg { width: 28px; height: 28px; }
   form { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 999px; height: 56px; padding: 0 20px; }
@@ -54,6 +55,7 @@
   </div>
 
   <nav class="grid" id="apps" aria-label="Apps"></nav>
+  <nav class="grid grid-out" id="apps-out" aria-label="Outside apps"></nav>
 
 
   <nav class="dock" id="dock" aria-label="Quick actions"></nav>
@@ -94,35 +96,35 @@
   // ---- EDIT HERE: add / change tiles. img = logo, d = fallback icon, href = link ('#' = not linked yet) ----
   var ROLE = (new URLSearchParams(window.location.search).get('name') || '').trim().toLowerCase() === 'willie' ? 'admin' : 'staff';
   var APPS_STAFF = [
+    { name:'Landscape Estimator', img:MOWER, d:I.file, href:SD+'139758', inhouse:1 },
+    { name:'Mowing Estimator', img:MOWER, d:I.file, href:SD+'161859', inhouse:1 },
+    { name:'Staff Hub', img:MOWER, d:I.users, href:SD+'178124', inhouse:1 },
+    { name:'WS Maintenance', img:MOWER, d:I.tool, href:SD+'177635', inhouse:1 },
+    { name:'Quick Add', img:MOWER, d:I.tool, href:'https://willie2471.github.io/Maintenance-Dashboard/quick.html', inhouse:1 },
+    { name:'WS Field Survey', img:MOWER, d:I.clip, href:SD+'158664', inhouse:1 },
+    { name:'WS Knowledge Base', img:MOWER, d:I.file, href:SD+'178164', inhouse:1 },
     { name:'Autopilot', img:SA, d:I.check, href:'https://my.serviceautopilot.com/' },
-    { name:'Landscape Estimator', img:MOWER, d:I.file, href:SD+'139758' },
-    { name:'Mowing Estimator', img:MOWER, d:I.file, href:SD+'161859' },
-    { name:'Staff Hub', img:MOWER, d:I.users, href:SD+'178124' },
-    { name:'WS Maintenance', img:MOWER, d:I.tool, href:SD+'177635' },
-    { name:'Quick Add', img:MOWER, d:I.tool, href:'https://willie2471.github.io/Maintenance-Dashboard/quick.html' },
-    { name:'WS Field Survey', img:MOWER, d:I.clip, href:SD+'158664' },
-    { name:'WS Knowledge Base', img:MOWER, d:I.file, href:SD+'178164' },
     { name:'Everychat', img:EC, d:I.msg, href:'https://my.everychat.com/inbox?channel=sms' },
     { name:'Dialpad', img:DP, d:I.phone, href:'https://www.dialpad.com/' },
     { name:'Amazon', img:AZ, d:I.cart, href:'https://www.amazon.com/?ref_=abn_logo' }
   ];
   var APPS_ADMIN = [
+    { name:'Landscape Estimator', img:MOWER, d:I.file, href:SD+'139758', inhouse:1 },
+    { name:'Mowing Estimator', img:MOWER, d:I.file, href:SD+'161859', inhouse:1 },
+    { name:'Staff Hub', img:MOWER, d:I.users, href:SD+'178124', inhouse:1 },
+    { name:'WS Maintenance', img:MOWER, d:I.tool, href:SD+'177635', inhouse:1 },
+    { name:'Quick Add', img:MOWER, d:I.tool, href:'https://willie2471.github.io/Maintenance-Dashboard/quick.html', inhouse:1 },
+    { name:'WS Field Survey', img:MOWER, d:I.clip, href:SD+'158664', inhouse:1 },
+    { name:'WS Knowledge Base', img:MOWER, d:I.file, href:SD+'178164', inhouse:1 },
+    { name:'WS Brainstorm Room', img:MOWER, d:I.users, href:SD+'177735', inhouse:1 },
     { name:'Autopilot', img:SA, d:I.check, href:'https://my.serviceautopilot.com/' },
-    { name:'Landscape Estimator', img:MOWER, d:I.file, href:SD+'139758' },
-    { name:'Mowing Estimator', img:MOWER, d:I.file, href:SD+'161859' },
-    { name:'Staff Hub', img:MOWER, d:I.users, href:SD+'178124' },
-    { name:'WS Maintenance', img:MOWER, d:I.tool, href:SD+'177635' },
-    { name:'Quick Add', img:MOWER, d:I.tool, href:'https://willie2471.github.io/Maintenance-Dashboard/quick.html' },
-    { name:'WS Field Survey', img:MOWER, d:I.clip, href:SD+'158664' },
-    { name:'WS Knowledge Base', img:MOWER, d:I.file, href:SD+'178164' },
-    { name:'WS Brainstorm Room', img:MOWER, d:I.users, href:SD+'177735' },
     { name:'Everychat', img:EC, d:I.msg, href:'https://my.everychat.com/inbox?channel=sms' },
     { name:'Dialpad', img:DP, d:I.phone, href:'https://www.dialpad.com/' },
     { name:'Amazon', img:AZ, d:I.cart, href:'https://www.amazon.com/?ref_=abn_logo' }
   ];
   var APPS = ROLE === 'admin' ? APPS_ADMIN : APPS_STAFF;
   var DOCK = [
-    { name:'Call',  d:I.phone, href:'https://www.dialpad.com/' },
+    { name:'Call',  d:I.phone, href:'tel:3212090668' },
     { name:'Text',  d:I.msg,   href:'https://my.everychat.com/inbox?channel=sms' },
     { name:'Email', d:I.mail,  href:'https://mail.google.com/' },
     { name:'Maps',  d:I.pin,   href:'https://www.google.com/maps' }
@@ -131,13 +133,18 @@
   function svg(d) {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="#14702F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"></path></svg>';
   }
+  // In-house apps open in the same window (the avatar button brings the user back to the menu).
+  // Outside apps open in a new tab. Phone/text/mail links go to the device's own app.
   function link(a) {
-    return 'href="' + a.href + '"' + (a.href === '#' ? '' : ' target="_blank" rel="noopener"');
+    if (a.href === '#' || /^(tel|sms|mailto):/.test(a.href)) return 'href="' + a.href + '"';
+    return 'href="' + a.href + '" target="' + (a.inhouse ? '_top' : '_blank') + '" rel="noopener"';
   }
-  document.getElementById('apps').innerHTML = APPS.map(function (a) {
+  function tile(a) {
     var ico = a.img ? '<img src="' + a.img + '" alt="">' : svg(a.d);
     return '<a class="app" ' + link(a) + '><div class="ico">' + ico + '</div><span>' + a.name + '</span></a>';
-  }).join('');
+  }
+  document.getElementById('apps').innerHTML = APPS.filter(function (a) { return a.inhouse; }).map(tile).join('');
+  document.getElementById('apps-out').innerHTML = APPS.filter(function (a) { return !a.inhouse; }).map(tile).join('');
   document.getElementById('dock').innerHTML = DOCK.map(function (a) {
     return '<a ' + link(a) + ' aria-label="' + a.name + '">' + svg(a.d) + '</a>';
   }).join('');
