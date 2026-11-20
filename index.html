@@ -92,7 +92,21 @@
   var SD = 'https://wsemployeeservices.wslawncareservicesllc.com/portal/dashboard/view/';
 
   // ---- EDIT HERE: add / change tiles. img = logo, d = fallback icon, href = link ('#' = not linked yet) ----
-  var APPS = [
+  var ROLE = (new URLSearchParams(window.location.search).get('name') || '').trim().toLowerCase() === 'willie' ? 'admin' : 'staff';
+  var APPS_STAFF = [
+    { name:'Autopilot', img:SA, d:I.check, href:'https://my.serviceautopilot.com/' },
+    { name:'Landscape Estimator', img:MOWER, d:I.file, href:SD+'139758' },
+    { name:'Mowing Estimator', img:MOWER, d:I.file, href:SD+'161859' },
+    { name:'Staff Hub', img:MOWER, d:I.users, href:SD+'178124' },
+    { name:'WS Maintenance', img:MOWER, d:I.tool, href:SD+'177635' },
+    { name:'Quick Add', img:MOWER, d:I.tool, href:'https://willie2471.github.io/Maintenance-Dashboard/quick.html' },
+    { name:'WS Field Survey', img:MOWER, d:I.clip, href:SD+'158664' },
+    { name:'WS Knowledge Base', img:MOWER, d:I.file, href:SD+'178164' },
+    { name:'Everychat', img:EC, d:I.msg, href:'https://my.everychat.com/inbox?channel=sms' },
+    { name:'Dialpad', img:DP, d:I.phone, href:'https://www.dialpad.com/' },
+    { name:'Amazon', img:AZ, d:I.cart, href:'https://www.amazon.com/?ref_=abn_logo' }
+  ];
+  var APPS_ADMIN = [
     { name:'Autopilot', img:SA, d:I.check, href:'https://my.serviceautopilot.com/' },
     { name:'Landscape Estimator', img:MOWER, d:I.file, href:SD+'139758' },
     { name:'Mowing Estimator', img:MOWER, d:I.file, href:SD+'161859' },
@@ -106,6 +120,7 @@
     { name:'Dialpad', img:DP, d:I.phone, href:'https://www.dialpad.com/' },
     { name:'Amazon', img:AZ, d:I.cart, href:'https://www.amazon.com/?ref_=abn_logo' }
   ];
+  var APPS = ROLE === 'admin' ? APPS_ADMIN : APPS_STAFF;
   var DOCK = [
     { name:'Call',  d:I.phone, href:'https://www.dialpad.com/' },
     { name:'Text',  d:I.msg,   href:'https://my.everychat.com/inbox?channel=sms' },
