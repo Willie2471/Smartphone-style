@@ -29,6 +29,13 @@
   .app .ico svg { width: 28px; height: 28px; }
   .app span { font-size: 12px; font-weight: 500; text-align: center; line-height: 1.2; }
   .app:hover .ico, .app:focus-visible .ico, .dock a:hover, .dock a:focus-visible { box-shadow: 0 0 0 3px rgba(33,163,72,.35); }
+  .app { position: relative; }
+  .app .ico { position: relative; }
+  .app .bdg { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #E5352B; color: #fff; font-size: 12px; font-weight: 700; line-height: 22px; text-align: center; box-shadow: 0 0 0 2px #F3F5F1; display: none; z-index: 2; }
+  .app.has-new .bdg { display: block; }
+  .app.has-new .ico { background: #CFEFD8; box-shadow: 0 0 0 3px #21A348; animation: wsPulse 2s ease-in-out infinite; }
+  @keyframes wsPulse { 0%,100% { box-shadow: 0 0 0 3px #21A348; } 50% { box-shadow: 0 0 0 7px rgba(33,163,72,.25); } }
+  @media (prefers-reduced-motion: reduce) { .app.has-new .ico { animation: none; } }
   .grid-out { margin-top: 22px; }
   .dock { display: flex; justify-content: space-around; margin-top: 28px; padding: 0 0 20px; }
   .dock a { width: 60px; height: 60px; border-radius: 50%; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
@@ -141,7 +148,7 @@
   }
   function tile(a) {
     var ico = a.img ? '<img src="' + a.img + '" alt="">' : svg(a.d);
-    return '<a class="app" ' + link(a) + '><div class="ico">' + ico + '</div><span>' + a.name + '</span></a>';
+    return '<a class="app" data-app="' + a.name + '" ' + link(a) + '><div class="ico">' + ico + '<b class="bdg" aria-hidden="true"></b></div><span>' + a.name + '</span></a>';
   }
   document.getElementById('apps').innerHTML = APPS.filter(function (a) { return a.inhouse; }).map(tile).join('');
   document.getElementById('apps-out').innerHTML = APPS.filter(function (a) { return !a.inhouse; }).map(tile).join('');
@@ -200,6 +207,61 @@
     });
   }
   weather(); setInterval(weather, 15 * 60 * 1000);
+})();
+</script>
+
+<!-- Staff Hub unread badge: reads the same Firebase project and sign-in as the Staff Hub (same github.io origin). Fails silently. -->
+<script src="https://willie2471.github.io/ws-staff-hub/config.js"></script>
+<script type="module">
+(async function () {
+  try {
+    var cfg = window.FIREBASE_CONFIG;
+    if (!cfg || !cfg.apiKey || String(cfg.apiKey).indexOf('PASTE') === 0) return;
+    var V = 'https://www.gstatic.com/firebasejs/10.14.1/';
+    var A = await import(V + 'firebase-app.js');
+    var AU = await import(V + 'firebase-auth.js');
+    var F = await import(V + 'firebase-firestore.js');
+    var app = A.initializeApp(cfg);
+    var auth = AU.getAuth(app);
+    var db = F.getFirestore(app);
+
+    var tile = document.querySelector('.app[data-app="Staff Hub"]');
+    if (!tile) return;
+    var bdg = tile.querySelector('.bdg');
+    var base = tile.getAttribute('aria-label') || 'Staff Hub';
+    var convs = {}, unsubs = [];
+    var ms = function (v) { return (v && v.toMillis) ? v.toMillis() : (v ? +v : 0); };
+
+    function paint(me) {
+      var n = 0;
+      Object.keys(convs).forEach(function (id) {
+        var c = convs[id];
+        // same rule the Staff Hub uses: last message is from someone else and newer than my last-read time
+        if (!c.archived && c.lastMessageBy && c.lastMessageBy !== me &&
+            ms(c.lastMessageAt) > ms(c.lastRead && c.lastRead[me])) n++;
+      });
+      bdg.textContent = n > 9 ? '9+' : String(n);
+      tile.classList.toggle('has-new', n > 0);
+      tile.setAttribute('aria-label', n ? base + ', ' + n + ' with new messages' : base);
+    }
+    function stop() { unsubs.forEach(function (u) { u(); }); unsubs = []; convs = {}; }
+
+    AU.onAuthStateChanged(auth, function (user) {
+      stop();
+      if (!user) { tile.classList.remove('has-new'); return; }
+      var me = user.uid;
+      [F.query(F.collection(db, 'conversations'), F.where('members', 'array-contains', me)),
+       F.query(F.collection(db, 'conversations'), F.where('everyone', '==', true))].forEach(function (q) {
+        unsubs.push(F.onSnapshot(q, function (snap) {
+          snap.docChanges().forEach(function (ch) {
+            if (ch.type === 'removed') delete convs[ch.doc.id]; else convs[ch.doc.id] = ch.doc.data();
+          });
+          paint(me);
+        }, function () {}));
+      });
+    });
+    window.addEventListener('pagehide', stop);
+  } catch (e) { /* badge is optional - never break the start page */ }
 })();
 </script>
 </body>
