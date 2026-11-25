@@ -338,15 +338,13 @@
   var back = document.getElementById('emBack'), list = document.getElementById('emList');
   if (!em || !back || !list) return;
   var ua = navigator.userAgent || '';
-  var android = /Android/i.test(ua);
   var ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
-  if (!android && !ios) return;                       // computers: the plain link opens the web inbox
+  if (!ios) return;                                   // Android and computers: the plain link opens the web inbox (Android can't open the Gmail app from a web page)
 
   var WEB = 'https://mail.google.com/mail/u/0/#inbox';
   var MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="#14702F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3zM3 7l9 6 9-6"></path></svg>';
   var WEBI = '<svg viewBox="0 0 24 24" fill="none" stroke="#14702F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>';
   var opts = [];
-  if (android) opts.push({ t: 'Gmail app', s: 'Opens your inbox in the Gmail app', i: MAIL, h: 'intent://mail.google.com/mail/u/0/#Intent;scheme=https;package=com.google.android.gm;S.browser_fallback_url=' + encodeURIComponent(WEB) + ';end', top: 1 });
   if (ios) {
     opts.push({ t: 'Gmail app', s: 'Opens your inbox in the Gmail app', i: MAIL, h: 'googlegmail:///', top: 1 });
     opts.push({ t: 'Mail app', s: 'Apple Mail', i: MAIL, h: 'message://', top: 1 });
