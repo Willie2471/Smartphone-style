@@ -388,7 +388,14 @@
   .app.is-tracking .bdg { display: block; background: #E5352B; }
   .app.is-tracking .ico { background: #CFEFD8; box-shadow: 0 0 0 3px #21A348; animation: wsPulse 2s ease-in-out infinite; }
   @media (prefers-reduced-motion: reduce) { .app.is-tracking .ico { animation: none; } }
+  .tt-toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); width: calc(100% - 28px); max-width: 400px; z-index: 60; background: #14201A; color: #fff; border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.35; box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; cursor: pointer; }
+  .tt-toast.show { display: block; }
+  .tt-toast.long { background: #B3261E; }
+  .tt-mute { position: fixed; right: 14px; bottom: 14px; z-index: 55; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid #D5DED4; background: #fff; color: #14702F; font: 600 13px/1 inherit; font-family: inherit; box-shadow: 0 2px 8px rgba(0,0,0,.15); display: none; cursor: pointer; }
+  .tt-mute.show { display: block; }
 </style>
+<div class="tt-toast" id="ttToast" role="alert" aria-live="assertive"></div>
+<button class="tt-mute" id="ttMute" type="button"></button>
 <script>
 (function () {
   var isAdmin = (new URLSearchParams(location.search).get('name') || '').trim().toLowerCase() === 'willie';
@@ -403,11 +410,91 @@
   var base = tile.getAttribute('aria-label') || 'WS Brainstorm Room';
   var run = null;      // { start: ms, name: 'task text' } while a timer is running
 
+  // ---- Reminders ----
+  // Blocked timers (a time block or a Day Plan slot): first at 10 min, then every 5 min.
+  // Open-ended timers: first at 60 min, then every 60 min.
+  // Any timer: from 8 hours on, a stronger alert every 5 min.
+  var BLOCKED = { first: 10 * 60000, every: 5 * 60000 }, OPEN = { first: 60 * 60000, every: 60 * 60000 };
+  var LONG_MS = 8 * 3600000, LONG_EVERY = 5 * 60000;
+  var toastEl = document.getElementById('ttToast'), muteEl = document.getElementById('ttMute');
+  var muted = false, lastSlot = null, lastStart = 0, audioCtx = null, toastT = 0;
+  try { muted = localStorage.getItem('ws_tt_alerts_muted') === '1'; } catch (e) {}
+
+  function unlockAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+  }
+  ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) { document.addEventListener(ev, unlockAudio, { passive: true }); });
+
+  function chime(long) {
+    if (!audioCtx || audioCtx.state !== 'running') return;     // browser has not allowed sound yet
+    var tones = long ? [660, 660, 660] : [880, 1100];
+    tones.forEach(function (f, i) {
+      try {
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain(), t0 = audioCtx.currentTime + i * 0.28;
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+        o.connect(g); g.connect(audioCtx.destination); o.start(t0); o.stop(t0 + 0.25);
+      } catch (e) {}
+    });
+  }
+  function buzz(long) {
+    try { if (navigator.vibrate) navigator.vibrate(long ? [500, 150, 500, 150, 500] : [200, 100, 200]); } catch (e) {}
+  }
+  function showToast(msg, long) {
+    toastEl.textContent = msg;
+    toastEl.className = 'tt-toast show' + (long ? ' long' : '');
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { toastEl.className = 'tt-toast'; }, long ? 15000 : 8000);
+  }
+  toastEl.addEventListener('click', function () { toastEl.className = 'tt-toast'; });
+
+  function paintMute() {
+    muteEl.className = 'tt-mute' + (run ? ' show' : '');
+    muteEl.textContent = muted ? '\uD83D\uDD15 Alerts off' : '\uD83D\uDD14 Alerts on';
+    muteEl.setAttribute('aria-pressed', muted ? 'true' : 'false');
+    muteEl.setAttribute('aria-label', muted ? 'Timer reminders are off. Tap to turn on.' : 'Timer reminders are on. Tap to turn off.');
+  }
+  muteEl.addEventListener('click', function () {
+    muted = !muted;
+    try { localStorage.setItem('ws_tt_alerts_muted', muted ? '1' : '0'); } catch (e) {}
+    unlockAudio(); paintMute();
+  });
+
+  function slotOf(ms, blocked) {
+    if (ms >= LONG_MS) return 100000 + Math.floor((ms - LONG_MS) / LONG_EVERY);
+    var c = blocked ? BLOCKED : OPEN;
+    return ms < c.first ? -1 : Math.floor((ms - c.first) / c.every);
+  }
+  function remind() {
+    if (!run) { lastSlot = null; lastStart = 0; return; }
+    var ms = Date.now() - run.start, slot = slotOf(ms, run.blocked), long = ms >= LONG_MS;
+    if (lastStart !== run.start) {                    // a timer we have not seen before
+      lastStart = run.start;
+      lastSlot = long ? -2 : slot;                    // no catch-up alert, except a timer already past 8 hours
+    }
+    if (slot > lastSlot) {
+      lastSlot = slot;
+      if (muted) return;
+      var t = clock(ms), nm = run.name ? ' \u2014 ' + run.name : '';
+      showToast(long ? '\u26A0\uFE0F Timer has been running ' + t + '. Did you forget to stop it?' + nm
+                     : '\u23F1 Still tracking ' + t + nm, long);
+      buzz(long); chime(long);
+    }
+  }
+
   function clock(ms) {
     var m = Math.max(0, Math.floor(ms / 60000));
     return m >= 60 ? Math.floor(m / 60) + 'h ' + ('0' + (m % 60)).slice(-2) + 'm' : m + 'm';
   }
   function paint() {
+    paintMute();
     if (!run) {
       tile.classList.remove('is-tracking');
       bdg.textContent = '';
@@ -426,24 +513,29 @@
     fetch(SYNC_URL + '?key=' + encodeURIComponent(SYNC_KEY) + '&t=' + Date.now() + '&action=load')
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        var items = j.items || [], r = null, notes = {};
+        var items = j.items || [], r = null, notes = {}, blocks = {}, plans = {};
         items.forEach(function (it) {
           if (it.del) return;
-          if (it.type === 'note') notes[it.id] = it.data || {};
+          var d = it.data || {};
+          if (it.type === 'note') notes[it.id] = d;
+          if (it.type === 'ttblk' && +d.allocatedSeconds > 0) blocks[d.pid] = 1;                 // a note's time block
+          if (it.type === 'ttproj' && +d.allocatedSeconds > 0) blocks[d.id] = 1;                 // a project added by hand with a block
+          if (it.type === 'ttplan') plans[d.id] = 1;                                              // a Day Plan slot
           if (it.id === 'ttrun:active' && it.data && +it.data.start > 0) r = it.data;
         });
         if (!r) { run = null; }
         else {
           var n = notes[String(r.pid || '').replace(/^n_/, '')];
-          run = { start: +r.start, name: n ? String(n.text || '').replace(/\s+/g, ' ').trim().slice(0, 40) : '' };
+          run = { start: +r.start, blocked: !!(blocks[r.pid] || (r.entryId && plans[r.entryId])), name: n ? String(n.text || '').replace(/\s+/g, ' ').trim().slice(0, 40) : '' };
         }
-        paint();
+        paint(); remind();
       })
       .catch(function () { /* offline: keep what is showing */ });
   }
   check();
   setInterval(check, POLL_MS);
   setInterval(paint, 20000);
+  setInterval(remind, 10000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
 })();
 </script>
