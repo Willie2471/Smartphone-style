@@ -236,6 +236,93 @@
 })();
 </script>
 
+<!-- ===== WS Utilities folder + small-phone layout ===== -->
+<style>
+  .phone { position: relative; min-height: 100vh; min-height: 100dvh; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .time .hm { font-size: clamp(72px, 21vw, 96px); letter-spacing: -0.05em; }
+  @media (max-height: 760px) {
+    .phone { padding-top: 28px; }
+    .grid { margin-top: 22px; gap: 16px 8px; }
+    .grid-out { margin-top: 16px; }
+    main > form { margin-top: 18px; height: 50px; }
+    .dock { margin-top: 16px; padding-bottom: 8px; }
+    .dock a { width: 54px; height: 54px; }
+  }
+  .fl-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; width: 38px; height: 38px; }
+  .app .ico .fl-mini img { width: 17px; height: 17px; object-fit: contain; }
+  .fl-back { position: fixed; inset: 0; background: rgba(20,32,26,.55); display: none; align-items: flex-end; justify-content: center; z-index: 62; }
+  .fl-back.show { display: flex; }
+  .fl-sheet { width: 100%; max-width: 440px; max-height: 85vh; max-height: 85dvh; overflow-y: auto; background: #fff; border-radius: 22px 22px 0 0; padding: 16px 20px calc(24px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,.25); }
+  .fl-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .fl-head h2 { margin: 0; font-size: 18px; color: #14702F; }
+  .fl-close { height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid #D5DED4; background: #fff; font-family: inherit; font-size: 14px; font-weight: 600; color: #14201A; cursor: pointer; }
+  .fl-sheet .grid { margin-top: 18px; }
+</style>
+<div class="fl-back" id="flBack" role="dialog" aria-modal="true" aria-labelledby="flTitle">
+  <div class="fl-sheet">
+    <div class="fl-head"><h2 id="flTitle">WS Utilities</h2><button class="fl-close" id="flClose" type="button">Close</button></div>
+    <div id="flBody"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var NAME = 'WS Utilities';            // the folder's name: change it here
+  var inner = document.getElementById('apps'), outer = document.getElementById('apps-out');
+  var back = document.getElementById('flBack'), body = document.getElementById('flBody');
+  if (!inner || !outer || !back || !body) return;
+  body.appendChild(inner);               // the in-house app tiles now live inside the folder
+
+  var icons = [].slice.call(inner.querySelectorAll('.ico img')).slice(0, 4).map(function (i) { return i.getAttribute('src'); });
+  var mini = icons.map(function (s) { return '<img src="' + s + '" alt="">'; }).join('');
+  var tile = document.createElement('a');
+  tile.className = 'app'; tile.href = '#'; tile.setAttribute('data-app', NAME);
+  tile.setAttribute('role', 'button'); tile.setAttribute('aria-haspopup', 'dialog'); tile.setAttribute('aria-label', NAME);
+  tile.innerHTML = '<div class="ico"><div class="fl-mini">' + mini + '</div><b class="bdg" aria-hidden="true"></b></div><span>' + NAME + '</span>';
+  outer.insertBefore(tile, outer.firstChild);
+  document.getElementById('flTitle').textContent = NAME;
+
+  var pushed = false;
+  function open() {
+    if (back.classList.contains('show')) return;
+    back.classList.add('show');
+    try { history.pushState({ fl: 1 }, ''); pushed = true; } catch (e) { pushed = false; }
+  }
+  function hide() { back.classList.remove('show'); }
+  function close() {
+    if (!back.classList.contains('show')) return;
+    if (pushed) { pushed = false; try { history.back(); return; } catch (e) {} }
+    hide();
+  }
+  tile.addEventListener('click', function (e) { e.preventDefault(); open(); });
+  document.getElementById('flClose').addEventListener('click', close);
+  back.addEventListener('pointerdown', function (e) { if (e.target === back) close(); });
+  window.addEventListener('popstate', function () { pushed = false; hide(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+  // The folder shows the alerts of the apps inside it: unread messages, overdue items and a running timer.
+  function sync() {
+    var count = 0, tracking = '', parts = [];
+    [].forEach.call(inner.querySelectorAll('.app'), function (t) {
+      var b = t.querySelector('.bdg'), txt = b ? b.textContent.trim() : '';
+      if (t.classList.contains('has-new') || t.classList.contains('is-overdue')) {
+        var n = parseInt(txt, 10) || (txt.indexOf('9+') === 0 ? 9 : 1);
+        count += n; parts.push(t.getAttribute('data-app') + ': ' + n);
+      } else if (t.classList.contains('is-tracking')) { tracking = txt; parts.push(t.getAttribute('data-app') + ': timer running'); }
+    });
+    var bdg = tile.querySelector('.bdg');
+    tile.classList.toggle('is-overdue', count > 0);
+    tile.classList.toggle('is-tracking', !count && !!tracking);
+    bdg.textContent = count ? (count > 9 ? '9+' : String(count)) : tracking;
+    if (count && tracking) bdg.textContent = (count > 9 ? '9+' : count);
+    var label = parts.length ? NAME + ', ' + parts.join(', ') : NAME;
+    tile.setAttribute('aria-label', label);
+    if (parts.length) tile.title = label; else tile.removeAttribute('title');
+  }
+  sync(); setInterval(sync, 1500);
+})();
+</script>
+<!-- ===== end WS Utilities folder ===== -->
+
 <!-- ===== Quick Post-it (admin only) ===== -->
 <style>
   .pn-back{position:fixed;inset:0;background:rgba(20,32,26,.55);display:none;align-items:flex-end;justify-content:center;z-index:50}
@@ -400,7 +487,8 @@
   .tt-toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); width: calc(100% - 28px); max-width: 400px; z-index: 60; background: #14201A; color: #fff; border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.35; box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; cursor: pointer; }
   .tt-toast.show { display: block; }
   .tt-toast.long { background: #B3261E; }
-  .tt-mute { position: fixed; right: 14px; bottom: 14px; z-index: 55; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid #D5DED4; background: #fff; color: #14702F; font: 600 13px/1 inherit; font-family: inherit; box-shadow: 0 2px 8px rgba(0,0,0,.15); display: none; cursor: pointer; }
+  .tt-mute { position: absolute; right: 24px; top: 98px; z-index: 5; height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid #D5DED4; background: #fff; color: #14702F; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; cursor: pointer; }
+  @media (max-height: 760px) { .tt-mute { top: 78px; } }
   .tt-mute.show { display: block; }
 </style>
 <div class="tt-toast" id="ttToast" role="alert" aria-live="assertive"></div>
@@ -426,6 +514,7 @@
   var BLOCKED = { first: 10 * 60000, every: 5 * 60000 }, OPEN = { first: 60 * 60000, every: 60 * 60000 };
   var LONG_MS = 8 * 3600000, LONG_EVERY = 5 * 60000;
   var toastEl = document.getElementById('ttToast'), muteEl = document.getElementById('ttMute');
+  var host = document.querySelector('main.phone'); if (host) host.appendChild(muteEl);   // sits under the avatar
   var muted = false, lastSlot = null, lastStart = 0, audioCtx = null, toastT = 0;
   try { muted = localStorage.getItem('ws_tt_alerts_muted') === '1'; } catch (e) {}
 
