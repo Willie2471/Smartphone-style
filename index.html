@@ -541,6 +541,82 @@
 </script>
 <!-- ===== end time-tracking badge ===== -->
 
+<!-- ===== Overdue badge on the WS Maintenance tile ===== -->
+<style>
+  .app.is-overdue .bdg { display: block; background: #E5352B; }
+  .app.is-overdue .ico { background: #FBE3E1; box-shadow: 0 0 0 3px #E5352B; animation: wsPulseRed 2s ease-in-out infinite; }
+  @keyframes wsPulseRed { 0%,100% { box-shadow: 0 0 0 3px #E5352B; } 50% { box-shadow: 0 0 0 7px rgba(229,53,43,.25); } }
+  @media (prefers-reduced-motion: reduce) { .app.is-overdue .ico { animation: none; } }
+</style>
+<script>
+(function () {
+  var tiles = [].slice.call(document.querySelectorAll('.app[data-app="WS Maintenance"]'));
+  if (!tiles.length) return;
+  var API = 'https://script.google.com/macros/s/AKfycbw2nRqb1O0W1Q_GjcfaPRkDyKPKbst5H74mFPqM4sRjEsjSzdNSryGk-VLJtVS3LMxE/exec';
+  var POLL_MS = 5 * 60000;
+  var base = tiles[0].getAttribute('aria-label') || 'WS Maintenance';
+  var svc = null, sup = null;       // overdue service count, overdue supply count (null = not loaded yet)
+
+  // Same rule the maintenance portal uses for each service interval (hours, miles, or calendar time).
+  function iStat(e, i) {
+    var now = new Date();
+    if (i.unit === 'hours') { var rem = ((i.lastHours || 0) + i.freq) - (e.hours || 0); return rem <= 0 ? 'overdue' : (rem <= i.freq * .2 ? 'due' : 'ok'); }
+    if (i.unit === 'miles') { var rem2 = ((i.lastMiles || 0) + i.freq) - (e.miles || 0); return rem2 <= 0 ? 'overdue' : (rem2 <= i.freq * .2 ? 'due' : 'ok'); }
+    var ld = i.lastDone ? new Date(i.lastDone) : new Date(e.purchaseDate || '2024-01-01'), dd = new Date(ld);
+    if (i.unit === 'days') dd.setDate(dd.getDate() + i.freq);
+    else if (i.unit === 'months') dd.setMonth(dd.getMonth() + i.freq);
+    else if (i.unit === 'years') dd.setFullYear(dd.getFullYear() + i.freq);
+    var diff = Math.round((dd - now) / 864e5);
+    return diff < 0 ? 'overdue' : (diff <= 30 ? 'due' : 'ok');
+  }
+  function eqOverdue(e) { return (e.intervals || []).some(function (i) { return iStat(e, i) === 'overdue'; }); }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function dayStr(v) { return String(v || '').slice(0, 10); }
+
+  function paint() {
+    var s = svc || 0, p = sup || 0, n = s + p;
+    tiles.forEach(function (t) {
+      var b = t.querySelector('.bdg');
+      t.classList.toggle('is-overdue', n > 0);
+      if (b) b.textContent = n > 9 ? '9+' : String(n);
+      var parts = [];
+      if (s) parts.push(s + ' overdue service' + (s === 1 ? '' : 's'));
+      if (p) parts.push(p + ' overdue suppl' + (p === 1 ? 'y' : 'ies'));
+      var label = parts.length ? base + ', ' + parts.join(', ') : base;
+      t.setAttribute('aria-label', label);
+      if (parts.length) t.title = label; else t.removeAttribute('title');
+    });
+  }
+  function get(action) {
+    return fetch(API + '?action=' + action + '&t=' + Date.now(), { redirect: 'follow' }).then(function (r) { return r.json(); });
+  }
+  function check() {
+    get('getAll').then(function (d) {
+      if (d && d.ok) { svc = (d.equipment || []).filter(eqOverdue).length; paint(); }
+    }).catch(function () { /* offline: keep what is showing */ });
+    get('getSupplies').then(function (r) {
+      if (!(r && r.ok && Array.isArray(r.supplies))) return;
+      var t = today(), items = r.supplies.filter(function (x) { return x && x.kind !== 'staple' && x.kind !== 'store'; });
+      var open = items.filter(function (x) { return x.status !== 'picked'; });
+      var late = open.filter(function (x) { var d = dayStr(x.due); return d && d < t; }).length;
+      // A repeat order whose reminder date has passed counts too, until it turns into an order in the portal.
+      r.supplies.forEach(function (s) {
+        if (!s || s.kind !== 'staple' || !s.repeatEvery) return;
+        var nd = dayStr(s.nextDue);
+        if (!nd || nd >= t) return;
+        if (open.some(function (i) { return String(i.stapleId) === String(s.id); })) return;
+        late++;
+      });
+      sup = late; paint();
+    }).catch(function () { /* offline: keep what is showing */ });
+  }
+  check();
+  setInterval(check, POLL_MS);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+})();
+</script>
+<!-- ===== end overdue badge ===== -->
+
 <!-- Staff Hub unread badge: reads the same Firebase project and sign-in as the Staff Hub (same github.io origin). Fails silently. -->
 <script src="https://willie2471.github.io/ws-staff-hub/config.js"></script>
 <script type="module">
