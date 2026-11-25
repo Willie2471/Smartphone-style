@@ -227,6 +227,162 @@
 })();
 </script>
 
+<!-- ===== Quick Post-it (admin only) ===== -->
+<style>
+  .pn-back{position:fixed;inset:0;background:rgba(20,32,26,.55);display:none;align-items:flex-end;justify-content:center;z-index:50}
+  .pn-back.show{display:flex}
+  .pn-sheet{width:100%;max-width:440px;background:#fff;border-radius:22px 22px 0 0;padding:20px 20px 26px;box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+  .pn-sheet h2{margin:0 0 12px;font-size:18px;color:#14702F}
+  .pn-sheet textarea{width:100%;min-height:84px;border:1px solid #D5DED4;border-radius:12px;padding:12px;font-family:inherit;font-size:16px;resize:vertical;background:#F3F6F1;color:#14201A;box-sizing:border-box}
+  .pn-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .pn-sw{width:34px;height:34px;border-radius:50%;border:2px solid rgba(0,0,0,.22);padding:0;cursor:pointer}
+  .pn-sw[aria-pressed="true"]{box-shadow:0 0 0 2px #fff,0 0 0 4px #14201A}
+  .pn-name{font-size:13px;color:#3C4A41}
+  .pn-sheet select{flex:1;min-width:140px;height:44px;border:1px solid #D5DED4;border-radius:10px;padding:0 8px;font-family:inherit;font-size:15px;background:#F3F6F1;color:#14201A}
+  .pn-sheet select.need{border-color:#B3261E;box-shadow:0 0 0 2px rgba(179,38,30,.25)}
+  .pn-btn{height:46px;padding:0 18px;border-radius:10px;border:1px solid #D5DED4;background:#fff;font-family:inherit;font-size:15px;font-weight:600;color:#14201A;cursor:pointer}
+  .pn-btn.go{background:#21A348;border-color:#21A348;color:#fff;flex:1}
+  .pn-btn:disabled{opacity:.6}
+  .pn-msg{min-height:18px;margin-top:10px;font-size:13px;color:#3C4A41}
+</style>
+
+<div class="pn-back" id="pnBack" role="dialog" aria-modal="true" aria-labelledby="pnTitle">
+  <div class="pn-sheet">
+    <h2 id="pnTitle">Quick Post-it</h2>
+    <label class="sr" for="pnText">Note</label>
+    <textarea id="pnText" maxlength="600" placeholder="Type a thought…"></textarea>
+    <div class="pn-row"><div id="pnSw" style="display:flex;gap:8px" role="group" aria-label="Category"></div><span class="pn-name" id="pnCat"></span></div>
+    <div class="pn-row"><select id="pnPri" aria-label="Priority (required)"></select></div>
+    <div class="pn-row"><button class="pn-btn" id="pnCancel" type="button">Cancel</button><button class="pn-btn go" id="pnAdd" type="button">Add note</button></div>
+    <div class="pn-msg" id="pnMsg" role="status"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Admin only (same rule the start page uses for the Brainstorm Room tile)
+  var isAdmin = (new URLSearchParams(location.search).get('name') || '').trim().toLowerCase() === 'willie';
+  var dock = document.getElementById('dock');
+  if (!isAdmin || !dock) return;
+
+  var SYNC_URL = 'https://script.google.com/macros/s/AKfycbwuYLQdo2fXqCcoVCAg5eMkpBsWbmrE6sls7Uo1ajXQ4rBxF6TQo997wLG8W49XqELi/exec';
+  var SYNC_KEY = 'wslc-b029354f820bec335a23';
+  var CATS = [
+    { id:'idea',     label:'Idea',     color:'#FFE27A' },
+    { id:'action',   label:'Action',   color:'#FFB27A' },
+    { id:'question', label:'Question', color:'#9ED3F2' },
+    { id:'customer', label:'Customer', color:'#F4B5CB' },
+    { id:'money',    label:'Money',    color:'#B7E08F' }
+  ];
+  var PRIS = [
+    { id:'hi',  label:'High Impact' },
+    { id:'mod', label:'Moderate Impact' },
+    { id:'low', label:'No Rush / Low Impact' }
+  ];
+  var cat = 'idea', items = [];
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Dock button (5th icon)
+  var a = document.createElement('a');
+  a.href = '#';
+  a.setAttribute('aria-label', 'Post-it note');
+  a.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#14702F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3zM15 3v6h6"></path></svg>';
+  dock.appendChild(a);
+
+  function drawSw() {
+    var box = $('pnSw'); box.textContent = '';
+    CATS.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'pn-sw'; b.style.background = c.color; b.title = c.label;
+      b.setAttribute('aria-label', c.label);
+      b.setAttribute('aria-pressed', c.id === cat ? 'true' : 'false');
+      b.addEventListener('click', function () { cat = c.id; drawSw(); });
+      box.appendChild(b);
+    });
+    $('pnCat').textContent = (CATS.filter(function (c) { return c.id === cat; })[0] || {}).label || '';
+  }
+
+  function reset() {
+    $('pnText').value = ''; $('pnMsg').textContent = '';
+    var s = $('pnPri'); s.classList.remove('need');
+    s.innerHTML = '<option value="">Priority… (required)</option>' +
+      PRIS.map(function (p) { return '<option value="' + p.id + '">' + p.label + '</option>'; }).join('');
+    drawSw();
+  }
+
+  function open() {
+    reset();
+    $('pnBack').classList.add('show');
+    $('pnText').focus();
+    // Pull your current category names/colors and existing notes (to find a free spot)
+    fetch(SYNC_URL + '?key=' + encodeURIComponent(SYNC_KEY) + '&t=' + Date.now() + '&action=load')
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        items = j.items || [];
+        items.forEach(function (it) {
+          if (it.type === 'config' && it.data && Array.isArray(it.data.cats)) {
+            it.data.cats.forEach(function (x) {
+              var c = CATS.filter(function (k) { return k.id === x.id; })[0];
+              if (!c) return;
+              if (x.label) c.label = String(x.label);
+              if (/^#[0-9a-fA-F]{6}$/.test(x.color || '')) c.color = x.color;
+            });
+          }
+        });
+        drawSw();
+      })
+      .catch(function () { /* defaults are fine */ });
+  }
+
+  function close() { $('pnBack').classList.remove('show'); }
+
+  function freeSpot() {
+    var taken = [], maxZ = 0;
+    items.forEach(function (it) {
+      if (it.del || it.type !== 'note') return;
+      var d = it.data || {};
+      maxZ = Math.max(maxZ, +d.z || 0);
+      if (!d.lane && !d.att) taken.push([+d.x || 0, +d.y || 0]);
+    });
+    for (var r = 0; r < 60; r++) for (var c = 0; c < 6; c++) {
+      var x = 24 + c * 244, y = 24 + r * 262;
+      if (!taken.some(function (t) { return Math.abs(t[0] - x) < 60 && Math.abs(t[1] - y) < 60; })) return { x: x, y: y, z: maxZ + 1 };
+    }
+    return { x: 24, y: 24, z: maxZ + 1 };
+  }
+
+  function save() {
+    var text = $('pnText').value.trim(), pr = $('pnPri').value, msg = $('pnMsg');
+    if (!text) { msg.textContent = 'Type the note first.'; $('pnText').focus(); return; }
+    if (!pr) { $('pnPri').classList.add('need'); msg.textContent = 'Choose a priority.'; $('pnPri').focus(); return; }
+    var p = freeSpot(), btn = $('pnAdd');
+    var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    var data = { text: text, cat: cat, x: p.x, y: p.y, z: p.z, pr: pr, ts: Date.now() };
+    btn.disabled = true; msg.textContent = 'Saving…';
+    fetch(SYNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: SYNC_KEY, action: 'save', since: Date.now(), items: [{ id: id, type: 'note', data: data, del: 0 }] })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error(j.error || 'refused');
+      items.push({ id: id, type: 'note', data: data });
+      msg.textContent = 'Added to the Brainstorm board ✓';
+      setTimeout(close, 900);
+    }).catch(function (e) {
+      msg.textContent = 'Could not save (' + (e.message || 'offline') + '). Your text is still here.';
+    }).then(function () { btn.disabled = false; });
+  }
+
+  a.addEventListener('click', function (e) { e.preventDefault(); open(); });
+  $('pnCancel').addEventListener('click', close);
+  $('pnAdd').addEventListener('click', save);
+  $('pnPri').addEventListener('change', function () { this.classList.remove('need'); });
+  $('pnBack').addEventListener('pointerdown', function (e) { if (e.target === this) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+})();
+</script>
+<!-- ===== end Quick Post-it ===== -->
+
 <!-- Staff Hub unread badge: reads the same Firebase project and sign-in as the Staff Hub (same github.io origin). Fails silently. -->
 <script src="https://willie2471.github.io/ws-staff-hub/config.js"></script>
 <script type="module">
