@@ -37,9 +37,10 @@
   @keyframes wsPulse { 0%,100% { box-shadow: 0 0 0 3px #21A348; } 50% { box-shadow: 0 0 0 7px rgba(33,163,72,.25); } }
   @media (prefers-reduced-motion: reduce) { .app.has-new .ico { animation: none; } }
   .grid-out { margin-top: 22px; }
-  .dock { display: flex; justify-content: space-around; margin-top: 28px; padding: 0 0 20px; }
+  .dock { display: flex; justify-content: space-around; margin-top: 22px; padding: 0 0 20px; }
   .dock a { width: 60px; height: 60px; border-radius: 50%; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; }
   .dock svg { width: 28px; height: 28px; }
+  main > form { margin-top: 28px; }
   form { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 999px; height: 56px; padding: 0 20px; }
   form input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16px; color: var(--ink); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -65,14 +66,15 @@
   <nav class="grid grid-out" id="apps-out" aria-label="Outside apps"></nav>
 
 
-  <nav class="dock" id="dock" aria-label="Quick actions"></nav>
-
   <form action="https://www.google.com/search" method="get" target="_blank">
     <input type="hidden" name="udm" value="50">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3C4A41" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"></path></svg>
     <label class="sr" for="q">Ask Gemini</label>
     <input id="q" name="q" type="text" placeholder="Ask Gemini a question…" autocomplete="off" enterkeyhint="search">
   </form>
+
+  <nav class="dock" id="dock" aria-label="Quick actions"></nav>
+
 </main>
 
 <script>
@@ -623,6 +625,121 @@
 })();
 </script>
 <!-- ===== end overdue badge ===== -->
+
+<!-- ===== Ask Gemini sheet ===== -->
+<style>
+  .ask-back{position:fixed;inset:0;background:rgba(20,32,26,.55);display:none;align-items:flex-end;justify-content:center;z-index:65}
+  .ask-back.show{display:flex}
+  .ask-sheet{width:100%;max-width:440px;height:88vh;height:88dvh;background:#fff;border-radius:22px 22px 0 0;display:flex;flex-direction:column;box-shadow:0 -8px 30px rgba(0,0,0,.25)}
+  .ask-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px}
+  .ask-head h2{margin:0;font-size:18px;color:#14702F}
+  .ask-close{height:38px;padding:0 16px;border-radius:999px;border:1px solid #D5DED4;background:#fff;font-family:inherit;font-size:14px;font-weight:600;color:#14201A;cursor:pointer}
+  .ask-log{flex:1;overflow-y:auto;padding:4px 18px 12px;-webkit-overflow-scrolling:touch}
+  .ask-q{margin:10px 0 8px auto;max-width:85%;background:#21A348;color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;font-size:15px;line-height:1.35;width:fit-content}
+  .ask-a{margin:0 0 12px;max-width:95%;background:#F3F6F1;border-radius:16px 16px 16px 4px;padding:12px 14px;font-size:15px;line-height:1.45;color:#14201A;word-wrap:break-word}
+  .ask-a.err{background:#FBE3E1;color:#8A1C14}
+  .ask-a.wait{color:#3C4A41}
+  .ask-src{margin-top:8px;font-size:12px;color:#3C4A41}
+  .ask-src a{color:#14702F;margin-right:10px}
+  .ask-note{font-size:12px;color:#5B6B60;margin:2px 0 8px}
+  .ask-form{display:flex;gap:10px;padding:10px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid #E3E9E1}
+  .ask-form input{flex:1;min-width:0;height:48px;border:1px solid #D5DED4;border-radius:999px;padding:0 18px;font-family:inherit;font-size:16px;background:#F3F6F1;color:#14201A;outline:0}
+  .ask-form button{height:48px;padding:0 20px;border-radius:999px;border:0;background:#21A348;color:#fff;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer}
+  .ask-form button:disabled{opacity:.6}
+</style>
+<div class="ask-back" id="askBack" role="dialog" aria-modal="true" aria-labelledby="askTitle">
+  <div class="ask-sheet">
+    <div class="ask-head"><h2 id="askTitle">Ask Gemini</h2><button class="ask-close" id="askClose" type="button">Close</button></div>
+    <div class="ask-log" id="askLog" aria-live="polite"></div>
+    <div class="ask-form"><input id="askIn" type="text" placeholder="Ask a follow-up…" autocomplete="off" enterkeyhint="send" aria-label="Your question"><button id="askSend" type="button">Send</button></div>
+  </div>
+</div>
+<script>
+(function () {
+  // After you set up the Apps Script (ws-ask-gemini.gs), paste its /exec address and your password here.
+  var ASK_URL = 'https://script.google.com/macros/s/AKfycbyQgD6kvELgMQm14VkmMVIhqouWJuz8bQ0c04Q1tvd6tRUk8pZXRLDJfUWOhDKHg5LmKg/exec';
+  var ASK_KEY = 'wsask-ItrustGod51';
+
+  var form = document.querySelector('main form'), q = document.getElementById('q');
+  var back = document.getElementById('askBack'), log = document.getElementById('askLog');
+  var inp = document.getElementById('askIn'), send = document.getElementById('askSend');
+  if (!form || !q || !back) return;
+  var hist = [], busy = false, pushed = false;
+
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; }
+  // Plain-text renderer: **bold**, "- " / "* " bullets, line breaks. Everything is inserted as text, never as HTML.
+  function fill(node, text) {
+    String(text).replace(/\r/g, '').split('\n').forEach(function (line, i) {
+      if (i) node.appendChild(document.createElement('br'));
+      line = line.replace(/^\s*[-*]\s+/, '• ').replace(/^#+\s*/, '');
+      line.split(/\*\*(.+?)\*\*/g).forEach(function (part, k) {
+        if (!part) return;
+        if (k % 2) { var b = document.createElement('b'); b.textContent = part; node.appendChild(b); }
+        else node.appendChild(document.createTextNode(part.replace(/\*/g, '')));
+      });
+    });
+  }
+  function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+  function openSheet() {
+    if (!back.classList.contains('show')) {
+      back.classList.add('show');
+      try { history.pushState({ ask: 1 }, ''); pushed = true; } catch (e) { pushed = false; }
+    }
+  }
+  function hideSheet() { back.classList.remove('show'); }
+  function closeSheet() {
+    if (!back.classList.contains('show')) return;
+    if (pushed) { pushed = false; try { history.back(); return; } catch (e) {} }
+    hideSheet();
+  }
+  window.addEventListener('popstate', function () { pushed = false; hideSheet(); });   // phone back button
+  document.getElementById('askClose').addEventListener('click', closeSheet);
+  back.addEventListener('pointerdown', function (e) { if (e.target === back) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+
+  function ask(text) {
+    if (busy) return;
+    busy = true; send.disabled = true;
+    log.appendChild(el('div', 'ask-q', text));
+    var wait = el('div', 'ask-a wait', 'Thinking…'); log.appendChild(wait); scrollDown();
+    fetch(ASK_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ key: ASK_KEY, q: text, h: hist.slice(-3) })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error((j && j.error) || 'No answer came back.');
+      wait.className = 'ask-a'; wait.textContent = ''; fill(wait, j.answer);
+      if (j.sources && j.sources.length) {
+        var s = el('div', 'ask-src', 'Sources: ');
+        j.sources.forEach(function (x) {
+          if (!/^https?:\/\//i.test(x.uri)) return;
+          var a = el('a', '', x.title); a.href = x.uri; a.target = '_blank'; a.rel = 'noopener'; s.appendChild(a);
+        });
+        wait.appendChild(s);
+      }
+      hist.push({ q: text, a: String(j.answer).slice(0, 1000) });
+    }).catch(function (e) {
+      wait.className = 'ask-a err';
+      wait.textContent = (e && e.message && e.message !== 'Failed to fetch') ? e.message : 'Could not reach Gemini. Check your signal and try again.';
+    }).then(function () {
+      if (!log.querySelector('.ask-note')) log.appendChild(el('div', 'ask-note', 'A quick guide only. Check the product label or equipment manual for anything safety-related.'));
+      busy = false; send.disabled = false; scrollDown();
+    });
+  }
+
+  // Search box on the start page: with ASK_URL set it opens this sheet; without it, it opens Google's AI Mode in a new tab.
+  form.addEventListener('submit', function (e) {
+    if (!ASK_URL) return;
+    e.preventDefault();
+    var t = q.value.trim(); if (!t) return;
+    q.value = ''; openSheet(); ask(t);
+  });
+  function followUp() { var t = inp.value.trim(); if (!t) return; inp.value = ''; ask(t); }
+  send.addEventListener('click', followUp);
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); followUp(); } });
+})();
+</script>
+<!-- ===== end Ask Gemini sheet ===== -->
 
 <!-- Staff Hub unread badge: reads the same Firebase project and sign-in as the Staff Hub (same github.io origin). Fails silently. -->
 <script src="https://willie2471.github.io/ws-staff-hub/config.js"></script>
