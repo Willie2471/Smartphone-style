@@ -383,6 +383,72 @@
 </script>
 <!-- ===== end Quick Post-it ===== -->
 
+<!-- ===== Time-tracking badge on the Brainstorm Room tile (admin only) ===== -->
+<style>
+  .app.is-tracking .bdg { display: block; background: #E5352B; }
+  .app.is-tracking .ico { background: #CFEFD8; box-shadow: 0 0 0 3px #21A348; animation: wsPulse 2s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .app.is-tracking .ico { animation: none; } }
+</style>
+<script>
+(function () {
+  var isAdmin = (new URLSearchParams(location.search).get('name') || '').trim().toLowerCase() === 'willie';
+  var tile = document.querySelector('.app[data-app="WS Brainstorm Room"]');
+  if (!isAdmin || !tile) return;
+  var bdg = tile.querySelector('.bdg');
+  if (!bdg) return;
+
+  var SYNC_URL = 'https://script.google.com/macros/s/AKfycbwuYLQdo2fXqCcoVCAg5eMkpBsWbmrE6sls7Uo1ajXQ4rBxF6TQo997wLG8W49XqELi/exec';
+  var SYNC_KEY = 'wslc-b029354f820bec335a23';
+  var POLL_MS = 30000;
+  var base = tile.getAttribute('aria-label') || 'WS Brainstorm Room';
+  var run = null;      // { start: ms, name: 'task text' } while a timer is running
+
+  function clock(ms) {
+    var m = Math.max(0, Math.floor(ms / 60000));
+    return m >= 60 ? Math.floor(m / 60) + 'h ' + ('0' + (m % 60)).slice(-2) + 'm' : m + 'm';
+  }
+  function paint() {
+    if (!run) {
+      tile.classList.remove('is-tracking');
+      bdg.textContent = '';
+      tile.setAttribute('aria-label', base);
+      tile.removeAttribute('title');
+      return;
+    }
+    var t = clock(Date.now() - run.start);
+    bdg.textContent = '⏱ ' + t;
+    tile.classList.add('is-tracking');
+    var label = base + ', tracking time' + (run.name ? ': ' + run.name : '') + ', ' + t;
+    tile.setAttribute('aria-label', label);
+    tile.title = label;
+  }
+  function check() {
+    fetch(SYNC_URL + '?key=' + encodeURIComponent(SYNC_KEY) + '&t=' + Date.now() + '&action=load')
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var items = j.items || [], r = null, notes = {};
+        items.forEach(function (it) {
+          if (it.del) return;
+          if (it.type === 'note') notes[it.id] = it.data || {};
+          if (it.id === 'ttrun:active' && it.data && +it.data.start > 0) r = it.data;
+        });
+        if (!r) { run = null; }
+        else {
+          var n = notes[String(r.pid || '').replace(/^n_/, '')];
+          run = { start: +r.start, name: n ? String(n.text || '').replace(/\s+/g, ' ').trim().slice(0, 40) : '' };
+        }
+        paint();
+      })
+      .catch(function () { /* offline: keep what is showing */ });
+  }
+  check();
+  setInterval(check, POLL_MS);
+  setInterval(paint, 20000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+})();
+</script>
+<!-- ===== end time-tracking badge ===== -->
+
 <!-- Staff Hub unread badge: reads the same Firebase project and sign-in as the Staff Hub (same github.io origin). Fails silently. -->
 <script src="https://willie2471.github.io/ws-staff-hub/config.js"></script>
 <script type="module">
