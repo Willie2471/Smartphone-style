@@ -610,9 +610,13 @@
   .tt-mute { position: absolute; right: 24px; top: 98px; z-index: 5; height: 28px; padding: 0 11px; border-radius: 999px; border: 1px solid #D5DED4; background: #fff; color: #14702F; font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; cursor: pointer; }
   @media (max-height: 760px) { .tt-mute { top: 78px; } }
   .tt-mute.show { display: block; }
+  .tt-clock { position: absolute; right: 24px; top: 132px; z-index: 5; height: 28px; padding: 0 11px; border-radius: 999px; border: 0; background: #E5352B; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; line-height: 1; box-shadow: 0 1px 4px rgba(0,0,0,.2); display: none; cursor: pointer; }
+  .tt-clock.show { display: block; }
+  @media (max-height: 760px) { .tt-clock { top: 112px; } }
 </style>
 <div class="tt-toast" id="ttToast" role="alert" aria-live="assertive"></div>
 <button class="tt-mute" id="ttMute" type="button"></button>
+<button class="tt-clock" id="ttClock" type="button"></button>
 <script>
 (function () {
   var isAdmin = (new URLSearchParams(location.search).get('name') || '').trim().toLowerCase() === 'willie';
@@ -634,7 +638,8 @@
   var BLOCKED = { first: 10 * 60000, every: 5 * 60000 }, OPEN = { first: 60 * 60000, every: 60 * 60000 };
   var LONG_MS = 8 * 3600000, LONG_EVERY = 5 * 60000;
   var toastEl = document.getElementById('ttToast'), muteEl = document.getElementById('ttMute');
-  var host = document.querySelector('main.phone'); if (host) host.appendChild(muteEl);   // sits under the avatar
+  var host = document.querySelector('main.phone'); if (host) host.appendChild(muteEl);
+  var clockEl = document.getElementById('ttClock'); if (host && clockEl) host.appendChild(clockEl);   // sits under the avatar
   var muted = false, lastSlot = null, lastStart = 0, audioCtx = null, toastT = 0;
   try { muted = localStorage.getItem('ws_tt_alerts_muted') === '1'; } catch (e) {}
 
@@ -674,11 +679,20 @@
   toastEl.addEventListener('click', function () { toastEl.className = 'tt-toast'; });
 
   function paintMute() {
+    if (clockEl) {
+      clockEl.className = 'tt-clock' + (run ? ' show' : '');
+      if (run) {
+        var ct = clock(Date.now() - run.start);
+        clockEl.textContent = '\u23F1 ' + ct;
+        clockEl.setAttribute('aria-label', 'Time tracking running ' + ct + (run.name ? ', ' + run.name : '') + '. Tap to open Brainstorm Room.');
+      }
+    }
     muteEl.className = 'tt-mute' + (run ? ' show' : '');
     muteEl.textContent = muted ? '\uD83D\uDD15 Alerts off' : '\uD83D\uDD14 Alerts on';
     muteEl.setAttribute('aria-pressed', muted ? 'true' : 'false');
     muteEl.setAttribute('aria-label', muted ? 'Timer reminders are off. Tap to turn on.' : 'Timer reminders are on. Tap to turn off.');
   }
+  if (clockEl) clockEl.addEventListener('click', function () { try { tile.click(); } catch (e) {} });
   muteEl.addEventListener('click', function () {
     muted = !muted;
     try { localStorage.setItem('ws_tt_alerts_muted', muted ? '1' : '0'); } catch (e) {}
