@@ -978,7 +978,50 @@
     // same rule the Staff Hub uses: last message is from someone else and newer than my last-read time
     function unread(c) { return !!c && !c.archived && !!c.lastMessageBy && c.lastMessageBy !== me && ms(c.lastMessageAt) > ms(c.lastRead && c.lastRead[me]); }
 
+    /* ---------- bird chirp for new messages (Staff Hub + field) ---------- */
+    var bCtx = null, primed = false, heard = {}, snapsIn = 0;
+    function bUnlock() {
+      try {
+        var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+        if (!bCtx) bCtx = new AC();
+        if (bCtx.state === 'suspended') bCtx.resume();
+      } catch (e) {}
+    }
+    ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) { document.addEventListener(ev, bUnlock, { passive: true }); });
+    function chirp() {
+      if (!bCtx || bCtx.state !== 'running') return;
+      // three quick rising tweets with a little wobble, high and airy so it never sounds like the timer bell
+      [[0, 2600, 3900], [0.14, 2900, 4300], [0.28, 2400, 3700]].forEach(function (c) {
+        try {
+          var t0 = bCtx.currentTime + c[0], o = bCtx.createOscillator(), g = bCtx.createGain(),
+              lfo = bCtx.createOscillator(), lg = bCtx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(c[1], t0);
+          o.frequency.exponentialRampToValueAtTime(c[2], t0 + 0.07);
+          o.frequency.exponentialRampToValueAtTime(c[1] * 0.9, t0 + 0.11);
+          lfo.frequency.value = 55; lg.gain.value = 90; lfo.connect(lg); lg.connect(o.frequency);
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.012);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+          o.connect(g); g.connect(bCtx.destination);
+          o.start(t0); lfo.start(t0); o.stop(t0 + 0.13); lfo.stop(t0 + 0.13);
+        } catch (e) {}
+      });
+    }
+    function checkChirp() {
+      var ring = false;
+      Object.keys(convs).forEach(function (id) {
+        var c = convs[id], t = ms(c.lastMessageAt);
+        if (unread(c) && t > (heard[id] || 0)) {
+          if (primed && !document.hidden && !(id === FIELD && chatOpen())) ring = true;
+        }
+        if (t > (heard[id] || 0)) heard[id] = t;
+      });
+      if (ring) chirp();
+    }
+
     function paint() {
+      checkChirp();
       var n = 0;
       Object.keys(convs).forEach(function (id) { if (id !== FIELD && unread(convs[id])) n++; });
       if (hubTile) {
@@ -993,7 +1036,7 @@
       }
       if (f && chatOpen()) markRead();
     }
-    function stop() { unsubs.forEach(function (u) { u(); }); unsubs = []; convs = {}; }
+    function stop() { unsubs.forEach(function (u) { u(); }); unsubs = []; convs = {}; primed = false; heard = {}; snapsIn = 0; }
 
     /* ---------- inline field chat ---------- */
     var back = document.getElementById('txBack'), log = document.getElementById('txLog'), form = document.getElementById('txForm');
@@ -1181,6 +1224,7 @@
           snap.docChanges().forEach(function (ch) {
             if (ch.type === 'removed') delete convs[ch.doc.id]; else convs[ch.doc.id] = ch.doc.data();
           });
+          if (++snapsIn >= 2) primed = true;     // first load of both lists is silent
           paint();
         }, function () {}));
       });
