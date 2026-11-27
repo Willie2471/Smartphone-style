@@ -984,9 +984,14 @@
       try {
         var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
         if (!bCtx) bCtx = new AC();
-        if (bCtx.state === 'suspended') bCtx.resume();
+        if (bCtx.state !== 'running') {
+          var pr = bCtx.resume();
+          if (pr && pr.then) pr.then(function () { if (owed) { owed = false; chirp(); } }, function () {});
+        } else if (owed) { owed = false; chirp(); }
       } catch (e) {}
     }
+    var owed = false;      // a chirp we could not play yet (sound not unlocked, or page was in the background)
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && owed) { owed = false; if (bCtx && bCtx.state === 'running') chirp(); else owed = true; } });
     ['pointerdown', 'touchstart', 'keydown'].forEach(function (ev) { document.addEventListener(ev, bUnlock, { passive: true }); });
     function chirp() {
       if (!bCtx || bCtx.state !== 'running') return;
@@ -1013,11 +1018,11 @@
       Object.keys(convs).forEach(function (id) {
         var c = convs[id], t = ms(c.lastMessageAt);
         if (unread(c) && t > (heard[id] || 0)) {
-          if (primed && !document.hidden && !(id === FIELD && chatOpen())) ring = true;
+          if (primed && !(id === FIELD && chatOpen() && !document.hidden)) ring = true;
         }
         if (t > (heard[id] || 0)) heard[id] = t;
       });
-      if (ring) chirp();
+      if (ring) { if (!document.hidden && bCtx && bCtx.state === 'running') chirp(); else owed = true; }
     }
 
     function paint() {
