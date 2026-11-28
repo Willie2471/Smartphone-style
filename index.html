@@ -801,7 +801,8 @@
     var diff = Math.round((dd - now) / 864e5);
     return diff < 0 ? 'overdue' : (diff <= 30 ? 'due' : 'ok');
   }
-  function eqOverdue(e) { return (e.intervals || []).some(function (i) { return iStat(e, i) === 'overdue'; }); }
+  // the portal's "Overdue Service" card counts every overdue task (interval), not every machine, so count the same way
+  function eqOverdue(e) { return (e.intervals || []).filter(function (i) { return iStat(e, i) === 'overdue'; }).length; }
   function today() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function dayStr(v) { return String(v || '').slice(0, 10); }
 
@@ -824,7 +825,7 @@
   }
   function check() {
     get('getAll').then(function (d) {
-      if (d && d.ok) { svc = (d.equipment || []).filter(eqOverdue).length; paint(); }
+      if (d && d.ok) { svc = (d.equipment || []).reduce(function (n, e) { return n + eqOverdue(e); }, 0); paint(); }
     }).catch(function () { /* offline: keep what is showing */ });
     get('getSupplies').then(function (r) {
       if (!(r && r.ok && Array.isArray(r.supplies))) return;
